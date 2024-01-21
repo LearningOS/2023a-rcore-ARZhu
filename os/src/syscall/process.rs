@@ -1,8 +1,9 @@
 //! Process management syscalls
 use crate::{
     config::MAX_SYSCALL_NUM,
-    task::{exit_current_and_run_next, suspend_current_and_run_next, TaskStatus},
-    timer::get_time_us,
+    task::{exit_current_and_run_next, suspend_current_and_run_next, TaskStatus, add_current_syscall_times, get_current_status, get_current_syscall_times, get_current_start_time},
+    timer::{get_time_ms, get_time_us},
+    syscall::*,
 };
 
 #[repr(C)]
@@ -26,6 +27,7 @@ pub struct TaskInfo {
 /// task exits and submit an exit code
 pub fn sys_exit(exit_code: i32) -> ! {
     trace!("[kernel] Application exited with code {}", exit_code);
+    add_current_syscall_times(SYSCALL_EXIT);
     exit_current_and_run_next();
     panic!("Unreachable in sys_exit!");
 }
@@ -34,6 +36,8 @@ pub fn sys_exit(exit_code: i32) -> ! {
 pub fn sys_yield() -> isize {
     trace!("kernel: sys_yield");
     suspend_current_and_run_next();
+    
+    add_current_syscall_times(SYSCALL_YIELD);
     0
 }
 
@@ -47,11 +51,22 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
             usec: us % 1_000_000,
         };
     }
+
+    add_current_syscall_times(SYSCALL_GET_TIME);
     0
 }
 
 /// YOUR JOB: Finish sys_task_info to pass testcases
 pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
     trace!("kernel: sys_task_info");
-    -1
+    
+    add_current_syscall_times(SYSCALL_TASK_INFO);
+    unsafe {
+        (*_ti).status = get_current_status();
+        (*_ti).syscall_times = get_current_syscall_times();
+        (*_ti).time = get_time_ms() - get_current_start_time();
+    }
+    
+
+    0
 }
